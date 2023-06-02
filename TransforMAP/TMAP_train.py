@@ -8,6 +8,8 @@ Created on Fri Apr 23 02:36:18 2021
 import utils
 import config
 import logging
+import json
+import gzip
 import numpy as np
 import pandas as pd
 import torch
@@ -37,30 +39,52 @@ BITMAP_SIZE=config.BITMAP_SIZE
 OFFSET=config.OFFSET
 #%%% Interface
 
-def read_load_trace_data(load_trace, num_prefetch_warmup_instructions):
+def read_load_trace_data(json_path, trace_dir, train_split):
     
-    def process_line(line):
-        split = line.strip().split(', ')
-        return int(split[0]), int(split[1]), int(split[2], 16), int(split[3], 16), split[4] == '1'
+    # def process_line(line):
+    #     split = line.strip().split(', ')
+    #     # iid, cycle count, load address, instructions pointer of load, llc hit/miss
+    #     return int(split[0]), int(split[1]), int(split[2], 16), int(split[3], 16), split[4] == '1'
 
+    def get_train_file_name():
+        j = open(json_path)
+        db = json.load(j)
+        training_files = []  # file names for training simpoints
+        for item in db["group_items"]:
+                if (item == "hmmer"):  # for loading is single group item
+                    for sub_item, num_spts in db["num_spts"][item].items():
+                        for i in range(1, num_spts + 1):
+                            result_dir = trace_dir + \
+                                         "/%s/%s/simpoint_%d" % (item, sub_item, i)
+                            result_file = result_dir + "/%s_%s_s%d_trace.out.gz" %\
+                                         (db["gp_full_name"][item], sub_item, i)
+                            training_files.append(result_file)
+        j.close()
+        del db
+        return training_files
+
+    training_files = get_train_file_name()
     train_data = []
     eval_data = []
-    if file_path[-2:] == 'xz':
-        with lzma.open(load_trace, 'rt') as f:
-            for line in f:
-                pline = process_line(line)
-                if pline[0] < num_prefetch_warmup_instructions * 1000000:
-                    train_data.append(pline)
-                else:
-                    eval_data.append(pline)
-    else:
-        with open(load_trace, 'r') as f:
-            for line in f:
-                pline = process_line(line)
-                if pline[0] < num_prefetch_warmup_instructions * 1000000:
-                    train_data.append(pline)
-                else:
-                    eval_data.append(pline)
+    for file_name in training_files:
+        if file_path[-2:] == 'xz':
+            with gzip.open(file_name, 'rt') as f:
+                lines = f.readlines()
+                for i, line in enumerate(lines):
+                    pline = int(line, 16)
+                    if i < train_split * len(lines):
+                        train_data.append(pline)
+                    else:
+                        eval_data.append(pline)
+        else:
+            with open(file_name, 'r') as f:
+                lines = f.readlines()
+                for i, line in enumerate(lines):
+                    pline = int(line, 16)
+                    if i < train_split * len(lines):
+                        train_data.append(pline)
+                    else:
+                        eval_data.append(pline)
 
     return train_data, eval_data
 
@@ -222,7 +246,7 @@ def to_bitmap(n,bitmap_size):
 
 def preprocessing_bit(data):
     df=pd.DataFrame(train_data)
-    df.columns=["id", "cycle", "addr", "ip", "hit"]
+    df.columns=["addr"]
     df['raw']=df['addr']
     df['page_address'] = [ x >> PAGE_BITS for x in df['raw']]
     #df['page_address_str'] = [ "%d" % x for x in df['page_address']]
@@ -280,9 +304,10 @@ if __name__ == "__main__":
     warnings.filterwarnings('ignore')
     
     import sys
-    file_path=sys.argv[1]
-    model_save_path=sys.argv[2]
-    TRAIN_NUM = int(sys.argv[3])
+    json_path=sys.argv[1]
+    trace_dir=sys.argv[2]
+    model_save_path=sys.argv[3]
+    TRAIN_SPLIT = float(sys.argv[4])
 
     if os.path.isfile(model_save_path) :
        loading=True
@@ -291,9 +316,9 @@ if __name__ == "__main__":
 
     print("TransforMAP training start, loading:",loading)
     log_path = model_save_path+".log"
-    train_data, eval_data = read_load_trace_data(file_path, TRAIN_NUM)
+    train_data, eval_data = read_load_trace_data(json_path, trace_dir, TRAIN_SPLIT)
     df_train = preprocessing_bit(train_data)[:][["future","past"]]
     Len_test = len(eval_data) if len(eval_data) < 10000 else 10000
     df_test = preprocessing_bit(eval_data)[:Len_test][["future","past"]]
-    run(df_train,df_test, model_save_path,log_path,load= loading)
+    run(df_train, df_test, model_save_path, log_path,load=loading)
     print_single_predict(df_test,1090,model_save_path)
