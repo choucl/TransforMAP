@@ -39,7 +39,7 @@ BITMAP_SIZE=config.BITMAP_SIZE
 OFFSET=config.OFFSET
 #%%% Interface
 
-def read_load_trace_data(json_path, trace_dir, train_split):
+def read_load_trace_data(json_path, trace_dir, work_group, train_split):
     
     # def process_line(line):
     #     split = line.strip().split(', ')
@@ -51,7 +51,7 @@ def read_load_trace_data(json_path, trace_dir, train_split):
         db = json.load(j)
         training_files = []  # file names for training simpoints
         for item in db["group_items"]:
-                if (item == "hmmer"):  # for loading is single group item
+                if (item == work_group):  # for loading is single group item
                     for sub_item, num_spts in db["num_spts"][item].items():
                         for i in range(1, num_spts + 1):
                             result_dir = trace_dir + \
@@ -67,7 +67,7 @@ def read_load_trace_data(json_path, trace_dir, train_split):
     train_data = []
     eval_data = []
     for file_name in training_files:
-        if file_path[-2:] == 'xz':
+        if file_name[-2:] == 'gz':
             with gzip.open(file_name, 'rt') as f:
                 lines = f.readlines()
                 for i, line in enumerate(lines):
@@ -244,7 +244,7 @@ def to_bitmap(n,bitmap_size):
         return list(l0)
     #print("Bitmap completed")
 
-def preprocessing_bit(data):
+def preprocessing_bit(train_data):
     df=pd.DataFrame(train_data)
     df.columns=["addr"]
     df['raw']=df['addr']
@@ -267,7 +267,7 @@ def preprocessing_bit(data):
             df["past"]+=df['page_cache_index_bin_past_%d'%(i+1)]
     
     # labels
-    df=df.sort_values(by=["page_address","cycle"])
+    df=df.sort_values(by=["page_address"])
     for i in range(PRED_FORWARD):
         df['cache_line_index_future_%d'%(i+1)]=df['cache_line_index'].shift(periods=-(i+1))
     
@@ -277,7 +277,7 @@ def preprocessing_bit(data):
             else:   
                 df["future_idx"] = df[['future_idx','cache_line_index_future_%d'%(i+1)]].values.astype(int).tolist()
     
-    df=df.sort_values(by=["id"])
+    # df=df.sort_values(by=["id"])
     df=df.dropna()
     
     df["future"]=(np.stack(df["future_idx"])+OFFSET).tolist()
@@ -299,15 +299,17 @@ def preprocessing_bit(data):
 if __name__ == "__main__":
     
     import os
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'#'2 in tarim'
     import warnings
     warnings.filterwarnings('ignore')
-    
     import sys
+
     json_path=sys.argv[1]
     trace_dir=sys.argv[2]
     model_save_path=sys.argv[3]
-    TRAIN_SPLIT = float(sys.argv[4])
+    WORK_GROUP = sys.argv[4]
+    TRAIN_SPLIT = float(sys.argv[5])
+    GPU_NUM = sys.argv[6]
+    os.environ['CUDA_VISIBLE_DEVICES'] = GPU_NUM #'2 in tarim'
 
     if os.path.isfile(model_save_path) :
        loading=True
@@ -316,7 +318,7 @@ if __name__ == "__main__":
 
     print("TransforMAP training start, loading:",loading)
     log_path = model_save_path+".log"
-    train_data, eval_data = read_load_trace_data(json_path, trace_dir, TRAIN_SPLIT)
+    train_data, eval_data = read_load_trace_data(json_path, trace_dir, WORK_GROUP, TRAIN_SPLIT)
     df_train = preprocessing_bit(train_data)[:][["future","past"]]
     Len_test = len(eval_data) if len(eval_data) < 10000 else 10000
     df_test = preprocessing_bit(eval_data)[:Len_test][["future","past"]]
