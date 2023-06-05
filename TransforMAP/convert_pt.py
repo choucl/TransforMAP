@@ -18,13 +18,18 @@ def main():
                        config.d_model, config.d_ff, config.n_heads, config.dropout)
     model.to(config.device)
     model.load_state_dict(torch.load(original_pt_path))
-    src_size = config.BLOCK_NUM_BITS * config.LOOK_BACK + config.PRED_FORWARD
+    src_size = config.BLOCK_NUM_BITS * config.LOOK_BACK + 2
     example_src = torch.rand(config.batch_size, src_size).to(torch.int).to(config.device)
     example_tgt = torch.rand(config.batch_size, 3).to(torch.int).to(config.device)
     example_src_mask = torch.rand(config.batch_size, 1, src_size).to(torch.int).to(config.device)
     example_src_tgt = torch.rand(config.batch_size, 3, 3).to(torch.int).to(config.device)
+    model.eval()
     traced_script_module = torch.jit.trace(model, (example_src, example_tgt, example_src_mask, example_src_tgt))
     traced_script_module.save(original_pt_path.split(".")[0] + "_smodule.pt")
+
+    gen_src = torch.rand(1, config.d_model).to(config.device)
+    gen_script_module = torch.jit.trace(model.generator, gen_src)
+    gen_script_module.save(original_pt_path.split(".")[0] + "_gen_smodule.pt")
 
 if __name__ == "__main__":
     main()
