@@ -71,7 +71,7 @@ def read_load_trace_data(json_path, trace_dir, work_group, train_split):
             with gzip.open(file_name, 'rt') as f:
                 lines = f.readlines()
                 for i, line in enumerate(lines):
-                    pline = int(line, 16)
+                    pline = i, int(line, 16)
                     if i < train_split * len(lines):
                         train_data.append(pline)
                     else:
@@ -80,7 +80,7 @@ def read_load_trace_data(json_path, trace_dir, work_group, train_split):
             with open(file_name, 'r') as f:
                 lines = f.readlines()
                 for i, line in enumerate(lines):
-                    pline = int(line, 16)
+                    pline = i, int(line, 16)
                     if i < train_split * len(lines):
                         train_data.append(pline)
                     else:
@@ -246,7 +246,7 @@ def to_bitmap(n,bitmap_size):
 
 def preprocessing_bit(train_data):
     df=pd.DataFrame(train_data)
-    df.columns=["addr"]
+    df.columns=["id", "addr"]
     df['raw']=df['addr']
     df['page_address'] = [ x >> PAGE_BITS for x in df['raw']]
     #df['page_address_str'] = [ "%d" % x for x in df['page_address']]
@@ -267,7 +267,7 @@ def preprocessing_bit(train_data):
             df["past"]+=df['page_cache_index_bin_past_%d'%(i+1)]
     
     # labels
-    df=df.sort_values(by=["page_address"])
+    df=df.sort_values(by=["page_address", "id"])
     for i in range(PRED_FORWARD):
         df['cache_line_index_future_%d'%(i+1)]=df['cache_line_index'].shift(periods=-(i+1))
     
@@ -277,8 +277,8 @@ def preprocessing_bit(train_data):
             else:   
                 df["future_idx"] = df[['future_idx','cache_line_index_future_%d'%(i+1)]].values.astype(int).tolist()
     
-    # df=df.sort_values(by=["id"])
-    df=df.dropna()
+    df = df.sort_values(by=["id"])
+    df = df.dropna()
     
     df["future"]=(np.stack(df["future_idx"])+OFFSET).tolist()
     
@@ -322,5 +322,5 @@ if __name__ == "__main__":
     df_train = preprocessing_bit(train_data)[:][["future","past"]]
     Len_test = len(eval_data) if len(eval_data) < 10000 else 10000
     df_test = preprocessing_bit(eval_data)[:Len_test][["future","past"]]
-    run(df_train, df_test, model_save_path, log_path,load=loading)
-    print_single_predict(df_test,1090,model_save_path)
+    run(df_train, df_test, model_save_path, log_path, load=loading)
+    print_single_predict(df_test, 1090, model_save_path)

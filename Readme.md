@@ -9,7 +9,7 @@
 ## 1. Model training
 
 ```
-./train.sh path_to_load_json path_of_data_dir path_to_save_model_to ratio_of_training_data
+./train.sh path_to_load_json path_of_data_dir path_to_save_model_to work_group ratio_of_training_data training_gpu_num
 ```
 
 * `train.sh` need to add executive permission using: `chmod +x ./train.sh`
