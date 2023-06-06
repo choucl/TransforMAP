@@ -29,7 +29,7 @@ eos_idx = 3
 src_vocab_size = 64+4#32000 #spliter,pad,end,start
 tgt_vocab_size = 64+4#32000
 batch_size = 128
-epoch_num = 50
+epoch_num = 300
 early_stop = 3
 lr = 3e-4
 

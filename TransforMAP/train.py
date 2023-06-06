@@ -29,12 +29,11 @@ def run_epoch(data, model, loss_compute):
 
 
 def train(train_data, dev_data, model, model_par, criterion, optimizer, model_save_path):
-    """训练并保存模型"""
-    # 初始化模型在dev集上的最优Loss为一个较大值
+    """ Train and save model """
     best_bleu_score = 0.0
     early_stop = config.early_stop
     for epoch in range(1, config.epoch_num + 1):
-        # 模型训练
+        # Model training
         model.train()
         #train_loss = run_epoch(train_data, model_par,
         #                       MultiGPULossCompute(model.generator, criterion, config.device_id, optimizer))
@@ -43,7 +42,7 @@ def train(train_data, dev_data, model, model_par, criterion, optimizer, model_sa
         
         logging.info("Epoch: {}, loss: {}".format(epoch, train_loss))
         torch.save(model.state_dict(), model_save_path)
-        # 模型验证
+        # Model validation
         if epoch%5==0:
             model.eval()
             dev_loss = run_epoch(dev_data, model_par,
@@ -52,7 +51,7 @@ def train(train_data, dev_data, model, model_par, criterion, optimizer, model_sa
             #logging.info('Epoch: {}, Dev loss: {}'.format(epoch, dev_loss))
             logging.info('Epoch: {}, Dev loss: {}, Accuracy Score: {}'.format(epoch, dev_loss, bleu_score))
 
-            # 如果当前epoch的模型在dev集上的loss优于之前记录的最优loss则保存当前模型，并更新最优loss值
+            # Update model if the bleu score is better on the current epoch
             if bleu_score > best_bleu_score:
                 torch.save(model.state_dict(), model_save_path)
                 best_bleu_score = bleu_score
@@ -67,7 +66,7 @@ def train(train_data, dev_data, model, model_par, criterion, optimizer, model_sa
 
 
 class LossCompute:
-    """简单的计算损失和进行参数反向传播更新训练的函数"""
+    """ Caculate loss and update back propagation parameters """
 
     def __init__(self, generator, criterion, opt=None):
         self.generator = generator
@@ -89,7 +88,7 @@ class LossCompute:
 
 
 class MultiGPULossCompute:
-    """A multi-gpu loss compute and train function."""
+    """ A multi-gpu loss compute and train function. """
 
     def __init__(self, generator, criterion, devices, opt=None, chunk_size=5):
         # Send out to different gpus.
@@ -148,11 +147,10 @@ class MultiGPULossCompute:
 
 
 def evaluate(data, model, mode='dev', use_beam=False):
-    """在data上用训练好的模型进行预测，打印模型翻译结果"""
+    """ Predict with trained model and print output """
     trg = []
     res = []
     with torch.no_grad():
-        # 在data的英文数据长度上遍历下标
         for batch in tqdm(data):
             src = batch.src
             src_mask = (src != 0).unsqueeze(-2)
@@ -183,11 +181,11 @@ def evaluate(data, model, mode='dev', use_beam=False):
 
 def test(data, model, criterion,model_save_path):
     with torch.no_grad():
-        # 加载模型
+        # Load model
         model.load_state_dict(torch.load(model_save_path))
         model_par = torch.nn.DataParallel(model)
         model.eval()
-        # 开始预测
+        # Start prediction
         #test_loss = run_epoch(data, model_par,
         #                      MultiGPULossCompute(model.generator, criterion, config.device_id, None))
         test_loss = run_epoch(train_data, model_par,
@@ -198,7 +196,7 @@ def test(data, model, criterion,model_save_path):
 
 
 def translate(src, model, model_save_path,use_beam=False):
-    """用训练好的模型进行预测单句，打印模型翻译结果"""
+    """ Predict with trained model and print output """
     with torch.no_grad():
         #model = torch.nn.DataParallel(model)#Pem
         model.load_state_dict(torch.load(model_save_path))
