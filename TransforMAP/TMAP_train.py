@@ -41,24 +41,21 @@ OFFSET=config.OFFSET
 
 def read_load_trace_data(json_path, trace_dir, work_group, train_split):
     
-    # def process_line(line):
-    #     split = line.strip().split(', ')
-    #     # iid, cycle count, load address, instructions pointer of load, llc hit/miss
-    #     return int(split[0]), int(split[1]), int(split[2], 16), int(split[3], 16), split[4] == '1'
-
     def get_train_file_name():
         j = open(json_path)
         db = json.load(j)
         training_files = []  # file names for training simpoints
+        work_group_list = work_group.split(",")
         for item in db["group_items"]:
-                if (item == work_group):  # for loading is single group item
-                    for sub_item, num_spts in db["num_spts"][item].items():
-                        for i in range(1, num_spts + 1):
-                            result_dir = trace_dir + \
-                                         "/%s/%s/simpoint_%d" % (item, sub_item, i)
-                            result_file = result_dir + "/%s_%s_s%d_trace.out.gz" %\
-                                         (db["gp_full_name"][item], sub_item, i)
-                            training_files.append(result_file)
+            if (item in work_group_list):  # for loading a single group item
+                print("Loading data:", item)
+                for sub_item, num_spts in db["num_spts"][item].items():
+                    for i in range(1, num_spts + 1):
+                        result_dir = trace_dir + \
+                                     "/%s/%s/simpoint_%d" % (item, sub_item, i)
+                        result_file = result_dir + "/%s_%s_s%d_trace.out.gz" %\
+                                     (db["gp_full_name"][item], sub_item, i)
+                        training_files.append(result_file)
         j.close()
         del db
         return training_files
@@ -176,14 +173,14 @@ def run(df_train,df_test,model_save_path,log_path,load=False):
                               True,collate_fn=train_dataset.collate_fn)
 
     logging.info("-------- Get Dataloader! --------")
-    # 初始化模型
+    # Initialize model
     model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_layers,
                        config.d_model, config.d_ff, config.n_heads, config.dropout)
     #model_par = torch.nn.DataParallel(model)
     if load==True:
         model.load_state_dict(torch.load(model_save_path))
     model_par=model
-    # 训练
+    # Train
     if config.use_smoothing:
         criterion = LabelSmoothing(size=config.tgt_vocab_size, padding_idx=config.padding_idx,
                                    smoothing=0.1)
@@ -200,7 +197,7 @@ def run(df_train,df_test,model_save_path,log_path,load=False):
     
 
 def one_access_predict(sent,model_save_path, beam_search=False):
-    # 初始化模型
+    # Initialize model
     model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_layers,
                        config.d_model, config.d_ff, config.n_heads, config.dropout)
     batch_input = torch.LongTensor(np.array(sent)).to(config.device)
