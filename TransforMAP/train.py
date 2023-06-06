@@ -35,11 +35,11 @@ def train(train_data, dev_data, model, model_par, criterion, optimizer, model_sa
     for epoch in range(1, config.epoch_num + 1):
         # Model training
         model.train()
-        #train_loss = run_epoch(train_data, model_par,
+        # train_loss = run_epoch(train_data, model_par,
         #                       MultiGPULossCompute(model.generator, criterion, config.device_id, optimizer))
         train_loss = run_epoch(train_data, model_par,
                                LossCompute(model.generator, criterion, optimizer))
-        
+
         logging.info("Epoch: {}, loss: {}".format(epoch, train_loss))
         torch.save(model.state_dict(), model_save_path)
         # Model validation
@@ -176,7 +176,7 @@ def evaluate(data, model, mode='dev', use_beam=False):
     trg_arr=np.array(trg)[:, 1:].reshape(-1)
     res_arr=np.array(res_not_end).reshape(-1)
     acc_score=accuracy_score(trg_arr,res_arr)
-    return acc_score#float(bleu.score)
+    return acc_score  #float(bleu.score)
 
 
 def test(data, model, criterion,model_save_path):
@@ -190,7 +190,7 @@ def test(data, model, criterion,model_save_path):
         #                      MultiGPULossCompute(model.generator, criterion, config.device_id, None))
         test_loss = run_epoch(train_data, model_par,
                                LossCompute(model.generator, criterion, None))
-        
+
         bleu_score = evaluate(data, model, 'test')
         logging.info('Test loss: {},  Accuracy Score: {}'.format(test_loss, bleu_score))
 
@@ -210,4 +210,4 @@ def translate(src, model, model_save_path,use_beam=False):
         else:
             decode_result = batch_greedy_decode(model, src, src_mask, max_len=config.max_len)
         return np.array(decode_result)[:,:-1]
-        # no ending symble
+        # no ending symbol

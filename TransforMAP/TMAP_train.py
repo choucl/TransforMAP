@@ -13,6 +13,7 @@ import gzip
 import numpy as np
 import pandas as pd
 import torch
+from torchinfo import summary
 from torch.utils.data import DataLoader
 
 from train import train, test, translate
@@ -40,7 +41,7 @@ OFFSET=config.OFFSET
 #%%% Interface
 
 def read_load_trace_data(json_path, trace_dir, work_group, train_split):
-    
+
     def get_train_file_name():
         j = open(json_path)
         db = json.load(j)
@@ -104,17 +105,16 @@ def create_window(df):
     return df
 
 
-
 def concact_past_future(df):
     for i in range(PRED_FORWARD):
         if i==0:
             df["future"]=df['words_future_%d'%(i+1)]
-        else:   
+        else:
             df["future"]+=df['words_future_%d'%(i+1)]
     for i in range(LOOK_BACK):
         if i==0:
             df["past"]=df['words_past_%d'%(i+1)]
-        else:   
+        else:
             df["past"]+=df['words_past_%d'%(i+1)]
     return df
 
@@ -158,7 +158,7 @@ def get_std_opt(model):
     return NoamOpt(model.src_embed[0].d_model, 1, 10000,
                    torch.optim.Adam(model.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9))
 
- 
+
 #%%% Run
 def run(df_train,df_test,model_save_path,log_path,load=False):
     utils.set_logger(log_path)
@@ -176,7 +176,7 @@ def run(df_train,df_test,model_save_path,log_path,load=False):
     # Initialize model
     model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_layers,
                        config.d_model, config.d_ff, config.n_heads, config.dropout)
-    #model_par = torch.nn.DataParallel(model)
+    # model_par = torch.nn.DataParallel(model)
     if load==True:
         model.load_state_dict(torch.load(model_save_path))
     model_par=model
@@ -191,10 +191,11 @@ def run(df_train,df_test,model_save_path,log_path,load=False):
         optimizer = get_std_opt(model)
     else:
         optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)
+    logging.info(summary(model, verbose=0))
     logging.info("Training Start:")
     train(train_dataloader, dev_dataloader, model, model_par, criterion, optimizer,model_save_path)
     logging.info("-------- Training Completed! --------")
-    
+
 
 def one_access_predict(sent,model_save_path, beam_search=False):
     # Initialize model
@@ -203,13 +204,13 @@ def one_access_predict(sent,model_save_path, beam_search=False):
     batch_input = torch.LongTensor(np.array(sent)).to(config.device)
     return translate(batch_input, model, model_save_path, use_beam=beam_search)
 
+
 def predict_case(df_case,idx,model_save_path):
     sent = list(df_case["past"][idx:idx+1].values)
     return one_access_predict(sent,model_save_path,beam_search=False)
 
 
 def print_single_predict(df_case,idx,model_save_path):
-
     print("input:")
     print(df_case["past"][idx:idx+1].values[0])
     label=df_case["future"][idx:idx+1].values
@@ -228,8 +229,9 @@ def convert_to_binary(data,bit_size=64-6):
     return [int(char)+OFFSET for char in res]
     # make it (1,2)
 
+
 #bitmap(1,2)
-def to_bitmap(n,bitmap_size): 
+def to_bitmap(n,bitmap_size):
     l0=np.ones((bitmap_size),dtype = int)
     if(len(n)>0):
         for x in n:
@@ -241,6 +243,7 @@ def to_bitmap(n,bitmap_size):
         return list(l0)
     #print("Bitmap completed")
 
+
 def preprocessing_bit(train_data):
     df=pd.DataFrame(train_data)
     df.columns=["id", "addr"]
@@ -250,36 +253,36 @@ def preprocessing_bit(train_data):
     df['page_offset'] = [x- (x >> PAGE_BITS<<PAGE_BITS) for x in df['raw']]
     df['cache_line_index'] = [int(x>> BLOCK_BITS) for x in df['page_offset']]
     df['page_cache_index'] = [x>>BLOCK_BITS for x in df['raw']]
-    
+
     df["page_cache_index_bin"]=df.apply(lambda x: convert_to_binary(x['page_cache_index'],BLOCK_NUM_BITS),axis=1)
-    
+
     # past
     for i in range(LOOK_BACK):
         df['page_cache_index_bin_past_%d'%(i+1)]=df['page_cache_index_bin'].shift(periods=(i+1))
-        
+
     for i in range(LOOK_BACK):
         if i==0:
             df["past"]=df['page_cache_index_bin_past_%d'%(i+1)]
-        else:   
+        else:
             df["past"]+=df['page_cache_index_bin_past_%d'%(i+1)]
-    
+
     # labels
     df=df.sort_values(by=["page_address", "id"])
     for i in range(PRED_FORWARD):
         df['cache_line_index_future_%d'%(i+1)]=df['cache_line_index'].shift(periods=-(i+1))
-    
+
     for i in range(PRED_FORWARD):
             if i==0:
                 df["future_idx"]=df['cache_line_index_future_%d'%(i+1)]
-            else:   
+            else:
                 df["future_idx"] = df[['future_idx','cache_line_index_future_%d'%(i+1)]].values.astype(int).tolist()
-    
+
     df = df.sort_values(by=["id"])
     df = df.dropna()
-    
+
     df["future"]=(np.stack(df["future_idx"])+OFFSET).tolist()
-    
- #   df["future"]=df.apply(lambda x: to_bitmap(x['future_idx'],BITMAP_SIZE),axis=1)
+
+    # df["future"]=df.apply(lambda x: to_bitmap(x['future_idx'],BITMAP_SIZE),axis=1)
     df["future"]=df.apply(lambda x: add_start_end(x['future'],START_ID,END_ID),axis=1)
 
     df["past"]=df.apply(lambda x: add_start_end(x['past'],START_ID,END_ID),axis=1)
@@ -288,13 +291,8 @@ def preprocessing_bit(train_data):
 
 ###################################################################################
 
-
-###################################################################################
-
-#%%
-
 if __name__ == "__main__":
-    
+
     import os
     import warnings
     warnings.filterwarnings('ignore')
@@ -306,7 +304,7 @@ if __name__ == "__main__":
     WORK_GROUP = sys.argv[4]
     TRAIN_SPLIT = float(sys.argv[5])
     GPU_NUM = sys.argv[6]
-    os.environ['CUDA_VISIBLE_DEVICES'] = GPU_NUM #'2 in tarim'
+    os.environ['CUDA_VISIBLE_DEVICES'] = GPU_NUM
 
     if os.path.isfile(model_save_path) :
        loading=True
