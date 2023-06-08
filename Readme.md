@@ -1,5 +1,8 @@
 # Instruction for Running TransforMAP, for ML-Based Data Prefetching Competition
 
+- Paper: [TransforMAP: Transformer for Memory Access Prediction](https://arxiv.org/abs/2205.14778#:~:text=TransforMAP%3A%20Transformer%20for%20Memory%20Access%20Prediction%20Pengmiao%20Zhang%2C,data%20before%20it%20is%20needed%20by%20a%20program.)
+- Original Source: [ML-Based Data Prefetching Competition](https://sites.google.com/view/mlarchsys/isca-2021/ml-prefetching-competition)
+
 ## 0. File structure
 
 * All codes are in the folder of `TransforMAP`, including python codes and `train.sh`, `generate.sh` two bash scripts following the guidance format.
