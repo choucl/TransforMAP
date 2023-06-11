@@ -161,7 +161,6 @@ def get_std_opt(model):
 
 #%%% Run
 def run(df_train,df_test,model_save_path,log_path,load=False):
-    utils.set_logger(log_path)
 
     train_dataset = MAPDataset(df_train)
     test_dataset = MAPDataset(df_test)
@@ -176,6 +175,10 @@ def run(df_train,df_test,model_save_path,log_path,load=False):
     # Initialize model
     model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_layers,
                        config.d_model, config.d_ff, config.n_heads, config.dropout)
+    logging.info("d_model: " + str(config.d_model))
+    logging.info("d_ff: " + str(config.d_ff))
+    logging.info("n_heads: " + str(config.n_heads))
+    logging.info("n_layers: " + str(config.n_layers))
     # model_par = torch.nn.DataParallel(model)
     if load==True:
         model.load_state_dict(torch.load(model_save_path))
@@ -313,6 +316,11 @@ if __name__ == "__main__":
 
     print("TransforMAP training start, loading:",loading)
     log_path = model_save_path+".log"
+    utils.set_logger(log_path)
+    logging.info("history length: " + str(config.LOOK_BACK))
+    logging.info("prefetch degree: " + str(config.PRED_FORWARD))
+    logging.info("work group: " + WORK_GROUP)
+    logging.info("trace path: " + trace_dir)
     train_data, eval_data = read_load_trace_data(json_path, trace_dir, WORK_GROUP, TRAIN_SPLIT)
     df_train = preprocessing_bit(train_data)[:][["future","past"]]
     Len_test = len(eval_data) if len(eval_data) < 10000 else 10000

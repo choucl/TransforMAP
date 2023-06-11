@@ -7,7 +7,7 @@ from torch.nn.utils.rnn import pad_sequence
 
 import config
 DEVICE = config.device
-PAD_ID=config.PAD_ID
+PAD_ID = config.PAD_ID
 
 def subsequent_mask(size):
     """Mask out subsequent positions."""
