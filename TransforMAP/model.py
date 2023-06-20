@@ -229,14 +229,14 @@ class Generator(nn.Module):
         return F.log_softmax(self.proj(x), dim=-1)
 
 
-def make_model(src_vocab, tgt_vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1):
+def make_model(src_vocab, tgt_vocab, encoder_layers=6, decoder_layers=6, d_model=512, d_ff=2048, h=8, dropout=0.1):
     c = copy.deepcopy
     attn = MultiHeadedAttention(h, d_model).to(DEVICE)
     ff = PositionwiseFeedForward(d_model, d_ff, dropout).to(DEVICE)
     position = PositionalEncoding(d_model, dropout).to(DEVICE)
     model = Transformer(
-        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout).to(DEVICE), N).to(DEVICE),
-        Decoder(DecoderLayer(d_model, c(attn), c(attn), c(ff), dropout).to(DEVICE), N).to(DEVICE),
+        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout).to(DEVICE), encoder_layers).to(DEVICE),
+        Decoder(DecoderLayer(d_model, c(attn), c(attn), c(ff), dropout).to(DEVICE), decoder_layers).to(DEVICE),
         nn.Sequential(Embeddings(d_model, src_vocab).to(DEVICE), c(position)),
         nn.Sequential(Embeddings(d_model, tgt_vocab).to(DEVICE), c(position)),
         Generator(d_model, tgt_vocab)).to(DEVICE)

@@ -173,12 +173,13 @@ def run(df_train,df_test,model_save_path,log_path,load=False):
 
     logging.info("-------- Get Dataloader! --------")
     # Initialize model
-    model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_layers,
+    model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_encoder_layers, config.n_decoder_layers,
                        config.d_model, config.d_ff, config.n_heads, config.dropout)
     logging.info("d_model: " + str(config.d_model))
     logging.info("d_ff: " + str(config.d_ff))
     logging.info("n_heads: " + str(config.n_heads))
-    logging.info("n_layers: " + str(config.n_layers))
+    logging.info("n_encoder_layers: " + str(config.n_encoder_layers))
+    logging.info("n_decoder_layers: " + str(config.n_decoder_layers))
     # model_par = torch.nn.DataParallel(model)
     if load==True:
         model.load_state_dict(torch.load(model_save_path))
@@ -202,7 +203,7 @@ def run(df_train,df_test,model_save_path,log_path,load=False):
 
 def one_access_predict(sent,model_save_path, beam_search=False):
     # Initialize model
-    model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_layers,
+    model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_encoder_layers, config.n_decoder_layers,
                        config.d_model, config.d_ff, config.n_heads, config.dropout)
     batch_input = torch.LongTensor(np.array(sent)).to(config.device)
     return translate(batch_input, model, model_save_path, use_beam=beam_search)

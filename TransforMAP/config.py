@@ -16,9 +16,11 @@ END_ID = 3
 VOCAB_SIZE = 64 + 3 #binary+3
 OFFSET = 4
 
-d_model = 128  #512
-n_heads = 4  #8
-n_layers = 4  #6
+d_model = 128 #512
+depth = 32
+n_heads = int(d_model / depth)  #8
+n_encoder_layers = 4  #6
+n_decoder_layers = 4  #6
 d_k = 32  #64
 d_v = 32  #64
 d_ff = 128  #2048

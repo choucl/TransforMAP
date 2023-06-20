@@ -20,7 +20,7 @@ def main():
         print("Usage: python3 convert.py original_pt_path")
         exit(-1)
     for path in original_pt_paths:
-        model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_layers,
+        model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_encoder_layers, config.n_decoder_layers,
                            config.d_model, config.d_ff, config.n_heads, config.dropout)
         model.to(DEVICE)
         model.load_state_dict(torch.load(path))
