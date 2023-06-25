@@ -77,7 +77,7 @@ def attention(query, key, value, mask=None, dropout=None):
 
     if dropout is not None:
         p_attn = dropout(p_attn)
-    return torch.matmul(p_attn, value), p_attn
+    return torch.matmul(p_attn, value), p_attn, scores
 
 
 class MultiHeadedAttention(nn.Module):
@@ -87,7 +87,9 @@ class MultiHeadedAttention(nn.Module):
         self.d_k = d_model // h
         self.h = h
         self.linears = clones(nn.Linear(d_model, d_model), 4)
+        self.attn_scores = None
         self.attn = None
+        self.attn_v = None
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, query, key, value, mask=None):
@@ -97,8 +99,10 @@ class MultiHeadedAttention(nn.Module):
 
         query, key, value = [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
                              for l, x in zip(self.linears, (query, key, value))]
-        x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
+        x, self.attn, self.scores = attention(query, key, value, mask=mask, 
+                                              dropout=self.dropout)
         x = x.transpose(1, 2).contiguous().view(nbatches, -1, self.h * self.d_k)
+        self.attn_v = x
         return self.linears[-1](x)
 
 
