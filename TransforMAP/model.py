@@ -74,10 +74,11 @@ def attention(query, key, value, mask=None, dropout=None):
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
     p_attn = F.softmax(scores, dim=-1)
+    p_attn_origin = p_attn.clone().detached()
 
     if dropout is not None:
         p_attn = dropout(p_attn)
-    return torch.matmul(p_attn, value), p_attn, scores
+    return torch.matmul(p_attn, value), p_attn, scores, p_attn_origin
 
 
 class MultiHeadedAttention(nn.Module):
@@ -88,6 +89,7 @@ class MultiHeadedAttention(nn.Module):
         self.h = h
         self.linears = clones(nn.Linear(d_model, d_model), 4)
         self.attn_scores = None
+        self.attn_origin = None
         self.attn = None
         self.attn_v = None
         self.dropout = nn.Dropout(p=dropout)
@@ -99,8 +101,8 @@ class MultiHeadedAttention(nn.Module):
 
         query, key, value = [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
                              for l, x in zip(self.linears, (query, key, value))]
-        x, self.attn, self.scores = attention(query, key, value, mask=mask, 
-                                              dropout=self.dropout)
+        x, self.attn, self.attn_scores, self.attn_origin = attention(query, key, value, mask=mask,
+                                                                     dropout=self.dropout)
         x = x.transpose(1, 2).contiguous().view(nbatches, -1, self.h * self.d_k)
         self.attn_v = x
         return self.linears[-1](x)
