@@ -1,4 +1,5 @@
 import torch
+import random
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -14,10 +15,27 @@ from data_loader import MAPDataset
 
 background_colors = ['green', 'yellow']
 
-def save_attention_figs(transformer_layer, save_dir_path):
+attn = None
+attn_origin = None
+
+def update_attention_figs(transformer_layer):
+    global attn
+    global attn_origin
+    if (attn is None):
+        attn = transformer_layer.self_attn.attn[0].clone().detach()
+    else:
+        attn += transformer_layer.self_attn.attn[0]
+
+    if (attn_origin is None):
+        attn_origin = transformer_layer.self_attn.attn_origin[0].clone().detach()
+    else:
+        attn_origin += transformer_layer.self_attn.attn_origin[0]
+
+
+def save_attention_figs(save_dir_path):
 
     def iterate_heads(property, name):
-        for i, head_result in tqdm(enumerate(property)):
+        for i, head_result in enumerate(property):
             plt.rcParams["figure.figsize"] = (10, 10)
             fig, ax = plt.subplots()
             for x in range(config.LOOK_BACK):
@@ -28,9 +46,9 @@ def save_attention_figs(transformer_layer, save_dir_path):
             _ = ax.imshow(head_result, cmap="Blues")
             plt.savefig(save_dir_path + '/%s_%d.png' % (name, i))
 
-    iterate_heads(transformer_layer.self_attn.attn[0], 'attn')
-    iterate_heads(transformer_layer.self_attn.attn_origin[0], 'attn_origin')
-    iterate_heads(transformer_layer.self_attn.attn_scores[0], 'attn_score')
+    iterate_heads(attn, 'attn')
+    iterate_heads(attn_origin, 'attn_origin')
+    print("Done saving figs")
 
 
 def visualizing(df_data, model_save_path, img_save_path):
@@ -45,14 +63,15 @@ def visualizing(df_data, model_save_path, img_save_path):
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False,
                             collate_fn=dataset.collate_fn)
     with torch.no_grad():
-        for batch in dataloader:
+        for batch in tqdm(dataloader):
             src = batch.src
             src_mask = (src != 0).unsqueeze(-2)
             decode_result = batch_greedy_decode(model, src, src_mask,
                                                 max_len=config.max_len)
-            save_attention_figs(model.encoder.layers[0], img_save_path)
+            update_attention_figs(model.encoder.layers[0])
             res.extend(decode_result)
     res = np.array(res)[:, :-1]
+    save_attention_figs(img_save_path)
 
 
 if __name__ == "__main__":
@@ -75,5 +94,5 @@ if __name__ == "__main__":
 
     print("TransforMAP visualize start, loading:", loading)
     read_data, _ = read_load_trace_data(json_path, trace_dir, WORK_GROUP, 1)
-    df_data = preprocessing_bit(read_data)[:1][["past", "future"]]
+    df_data = preprocessing_bit(read_data).sample(n=1000)[["past", "future"]]
     visualizing(df_data, model_save_path, img_save_path)
