@@ -6,6 +6,7 @@ TOTAL_BITS = 64
 BLOCK_NUM_BITS = TOTAL_BITS - BLOCK_BITS
 SPLIT_BITS = 6
 LOOK_BACK = 5
+SKIP_FORWARD = 2
 PRED_FORWARD = 2
 BITMAP_SIZE = 2**(PAGE_BITS - BLOCK_BITS)
 
@@ -55,4 +56,4 @@ if gpu_id != '':
 else:
     device = torch.device('cpu')
 
-workgroup_trace_length = 50000
+workgroup_trace_length = 100000

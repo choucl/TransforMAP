@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Apr 23 02:36:18 2021
-
-@author: pengmiao
-"""
-
 import utils
 import config
 import logging
@@ -16,19 +9,16 @@ import torch
 from torchinfo import summary
 from torch.utils.data import DataLoader
 
-from train import train, test, translate
+from train import train, translate
 from data_loader import MAPDataset
 from model import make_model, LabelSmoothing
-from train import train, test, translate
-import pdb
-import lzma
-from tqdm import tqdm
 # %% Preprocessing
 # %%%
 BLOCK_BITS = config.BLOCK_BITS
 TOTAL_BITS = config.TOTAL_BITS
 VOCAB_SIZE = config.VOCAB_SIZE
 LOOK_BACK = config.LOOK_BACK
+SKIP_FORWARD = config.SKIP_FORWARD
 PRED_FORWARD = config.PRED_FORWARD
 
 PAD_ID = config.PAD_ID
@@ -120,8 +110,8 @@ def concact_past_future(df):
     return df
 
 
-def add_start_end(column_list,start_id,end_id):
-    return [start_id]+column_list+[end_id]
+def add_start_end(column_list, start_id, end_id):
+    return [start_id] + column_list + [end_id]
 
 #%% Main of Transformer
 
@@ -250,47 +240,46 @@ def to_bitmap(n,bitmap_size):
 
 
 def preprocessing_bit(train_data):
-    df=pd.DataFrame(train_data)
-    df.columns=["id", "addr"]
-    df['raw']=df['addr']
-    df['page_address'] = [ x >> PAGE_BITS for x in df['raw']]
-    #df['page_address_str'] = [ "%d" % x for x in df['page_address']]
-    df['page_offset'] = [x- (x >> PAGE_BITS<<PAGE_BITS) for x in df['raw']]
-    df['cache_line_index'] = [int(x>> BLOCK_BITS) for x in df['page_offset']]
-    df['page_cache_index'] = [x>>BLOCK_BITS for x in df['raw']]
+    df = pd.DataFrame(train_data)
+    df.columns = ["id", "addr"]
+    df['raw'] = df['addr']
+    df['page_address'] = [x >> PAGE_BITS for x in df['raw']]
+    df['page_offset'] = [x - (x >> PAGE_BITS << PAGE_BITS) for x in df['raw']]
+    df['cache_line_index'] = [int(x >> BLOCK_BITS) for x in df['page_offset']]
+    df['page_cache_index'] = [x >> BLOCK_BITS for x in df['raw']]
 
-    df["page_cache_index_bin"]=df.apply(lambda x: convert_to_binary(x['page_cache_index'],BLOCK_NUM_BITS),axis=1)
+    df["page_cache_index_bin"] = df.apply(
+            lambda x: convert_to_binary(x['page_cache_index'], BLOCK_NUM_BITS), axis=1)
 
     # past
     for i in range(LOOK_BACK):
-        df['page_cache_index_bin_past_%d'%(i+1)]=df['page_cache_index_bin'].shift(periods=(i+1))
-
-    for i in range(LOOK_BACK):
-        if i==0:
-            df["past"]=df['page_cache_index_bin_past_%d'%(i+1)]
+        df['page_cache_index_bin_past_%d' % (i+1)] = df['page_cache_index_bin'].shift(periods=(i+1))
+        if i == 0:
+            df["past"] = df['page_cache_index_bin_past_%d' % (i+1)]
         else:
-            df["past"]+=df['page_cache_index_bin_past_%d'%(i+1)]
+            df["past"] += df['page_cache_index_bin_past_%d' % (i+1)]
 
     # labels
-    df=df.sort_values(by=["page_address", "id"])
+    df = df.sort_values(by=["page_address", "id"])
     for i in range(PRED_FORWARD):
-        df['cache_line_index_future_%d'%(i+1)]=df['cache_line_index'].shift(periods=-(i+1))
+        shift_period = -(i + 1) - SKIP_FORWARD
+        df['cache_line_index_future_%d' % (i+1)] = df['cache_line_index'].shift(periods=shift_period)
 
     for i in range(PRED_FORWARD):
-            if i==0:
-                df["future_idx"]=df['cache_line_index_future_%d'%(i+1)]
-            else:
-                df["future_idx"] = df[['future_idx','cache_line_index_future_%d'%(i+1)]].values.astype(int).tolist()
+        if i == 0:
+            df["future_idx"] = df['cache_line_index_future_%d' % (i+1)]
+        else:
+            df["future_idx"] = df[['future_idx', 'cache_line_index_future_%d' % (i+1)]].values.astype(int).tolist()
 
     df = df.sort_values(by=["id"])
     df = df.dropna()
 
-    df["future"]=(np.stack(df["future_idx"])+OFFSET).tolist()
+    df["future"] = (np.stack(df["future_idx"])+OFFSET).tolist()
 
     # df["future"]=df.apply(lambda x: to_bitmap(x['future_idx'],BITMAP_SIZE),axis=1)
-    df["future"]=df.apply(lambda x: add_start_end(x['future'],START_ID,END_ID),axis=1)
+    df["future"] = df.apply(lambda x: add_start_end(x['future'], START_ID, END_ID), axis=1)
 
-    df["past"]=df.apply(lambda x: add_start_end(x['past'],START_ID,END_ID),axis=1)
+    df["past"] = df.apply(lambda x: add_start_end(x['past'], START_ID, END_ID), axis=1)
 
     return df
 
