@@ -23,22 +23,23 @@ from train import train, test, translate
 import pdb
 import lzma
 from tqdm import tqdm
-#%% Preprocessing
-#%%%
-BLOCK_BITS=config.BLOCK_BITS
-TOTAL_BITS=config.TOTAL_BITS
-VOCAB_SIZE=config.VOCAB_SIZE
-LOOK_BACK=config.LOOK_BACK
-PRED_FORWARD=config.PRED_FORWARD
+# %% Preprocessing
+# %%%
+BLOCK_BITS = config.BLOCK_BITS
+TOTAL_BITS = config.TOTAL_BITS
+VOCAB_SIZE = config.VOCAB_SIZE
+LOOK_BACK = config.LOOK_BACK
+PRED_FORWARD = config.PRED_FORWARD
 
-PAD_ID=config.PAD_ID
-START_ID=config.START_ID
-END_ID=config.END_ID
-BLOCK_NUM_BITS=config.BLOCK_NUM_BITS
-PAGE_BITS=config.PAGE_BITS
-BITMAP_SIZE=config.BITMAP_SIZE
-OFFSET=config.OFFSET
-#%%% Interface
+PAD_ID = config.PAD_ID
+START_ID = config.START_ID
+END_ID = config.END_ID
+BLOCK_NUM_BITS = config.BLOCK_NUM_BITS
+PAGE_BITS = config.PAGE_BITS
+BITMAP_SIZE = config.BITMAP_SIZE
+OFFSET = config.OFFSET
+# %%% Interface
+
 
 def read_load_trace_data(json_path, trace_dir, work_group, train_split):
 
@@ -47,43 +48,43 @@ def read_load_trace_data(json_path, trace_dir, work_group, train_split):
         db = json.load(j)
         training_files = []  # file names for training simpoints
         work_group_list = work_group.split(",")
+        spt_count = {}
         for item in db["group_items"]:
-            if (item in work_group_list):  # for loading a single group item
-                print("Loading data:", item)
+            # select work groups
+            if (work_group == 'all' or item in work_group_list):
+                spt_count[item] = 0
                 for sub_item, num_spts in db["num_spts"][item].items():
+                    spt_count[item] += num_spts
                     for i in range(1, num_spts + 1):
                         result_dir = trace_dir + \
                                      "/%s/%s/simpoint_%d" % (item, sub_item, i)
                         result_file = result_dir + "/%s_%s_s%d_trace.out.gz" %\
-                                     (db["gp_full_name"][item], sub_item, i)
+                                      (db["gp_full_name"][item], sub_item, i)
                         training_files.append(result_file)
         j.close()
         del db
-        return training_files
+        return training_files, spt_count
 
-    training_files = get_train_file_name()
+    training_files, spt_count = get_train_file_name()
     train_data = []
     eval_data = []
     for file_name in training_files:
-        if file_name[-2:] == 'gz':
-            with gzip.open(file_name, 'rt') as f:
-                lines = f.readlines()
-                for i, line in enumerate(lines):
-                    pline = i, int(line, 16)
-                    if i < train_split * len(lines):
-                        train_data.append(pline)
-                    else:
-                        eval_data.append(pline)
-        else:
-            with open(file_name, 'r') as f:
-                lines = f.readlines()
-                for i, line in enumerate(lines):
-                    pline = i, int(line, 16)
-                    if i < train_split * len(lines):
-                        train_data.append(pline)
-                    else:
-                        eval_data.append(pline)
-
+        cur_work_group = file_name.split('/')[4]
+        print("Loading data:", file_name)
+        with gzip.open(file_name, 'rt') as f:
+            lines = f.readlines()
+            if (work_group == 'all'):
+                trace_per_spt = config.workgroup_trace_length // spt_count[cur_work_group]
+                if (len(lines) > trace_per_spt):
+                    lines = lines[:trace_per_spt]
+                else:
+                    lines += lines[:trace_per_spt - len(lines)]
+            for i, line in enumerate(lines):
+                pline = i, int(line, 16)
+                if i < train_split * len(lines):
+                    train_data.append(pline)
+                else:
+                    eval_data.append(pline)
     return train_data, eval_data
 
 #%%% My Functions

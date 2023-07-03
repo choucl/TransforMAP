@@ -54,3 +54,5 @@ if gpu_id != '':
     device = torch.device('cuda')
 else:
     device = torch.device('cpu')
+
+workgroup_trace_length = 50000
