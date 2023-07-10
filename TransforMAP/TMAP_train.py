@@ -334,6 +334,7 @@ if __name__ == "__main__":
     print("TransforMAP training start, loading:", loading)
     utils.set_logger(log_path)
     logging.info("history length: " + str(config.LOOK_BACK))
+    logging.info("skip length: " + str(config.SKIP_FORWARD))
     logging.info("prefetch degree: " + str(config.PRED_FORWARD))
     logging.info("work group: " + WORK_GROUP)
     logging.info("trace path: " + trace_dir)
