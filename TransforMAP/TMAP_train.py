@@ -326,7 +326,8 @@ if __name__ == "__main__":
         loading = False
         if (SIMPOINT_MODE is True):
             os.mkdir(model_save_path)
-            log_path = "%s/%s.log" % (model_save_path, model_save_path)
+            file_name = model_save_path.split('/')[-1]
+            log_path = "%s/%s.log" % (model_save_path, file_name)
         else:
             log_path = model_save_path + ".log"
 
