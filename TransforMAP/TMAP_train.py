@@ -3,6 +3,7 @@ import config
 import logging
 import json
 import gzip
+import os
 import numpy as np
 import pandas as pd
 import torch
@@ -12,8 +13,8 @@ from torch.utils.data import DataLoader
 from train import train, translate
 from data_loader import MAPDataset
 from model import make_model, LabelSmoothing
+
 # %% Preprocessing
-# %%%
 BLOCK_BITS = config.BLOCK_BITS
 TOTAL_BITS = config.TOTAL_BITS
 VOCAB_SIZE = config.VOCAB_SIZE
@@ -31,7 +32,8 @@ OFFSET = config.OFFSET
 # %%% Interface
 
 
-def read_load_trace_data(json_path, trace_dir, work_group, train_split):
+def read_load_trace_data(json_path, trace_dir, work_group,
+                         train_split, sp_stat=None):
 
     def get_train_file_name():
         j = open(json_path)
@@ -45,12 +47,30 @@ def read_load_trace_data(json_path, trace_dir, work_group, train_split):
                 spt_count[item] = 0
                 for sub_item, num_spts in db["num_spts"][item].items():
                     spt_count[item] += num_spts
-                    for i in range(1, num_spts + 1):
-                        result_dir = trace_dir + \
-                                     "/%s/%s/simpoint_%d" % (item, sub_item, i)
-                        result_file = result_dir + "/%s_%s_s%d_trace.out.gz" %\
-                                      (db["gp_full_name"][item], sub_item, i)
-                        training_files.append(result_file)
+                    if (sp_stat is None):
+                        for i in range(1, num_spts + 1):
+                            result_dir = trace_dir + \
+                                 "/%s/%s/simpoint_%d" % (item, sub_item, i)
+                            result_file = result_dir + "/%s_%s_s%d_trace.out.gz"%\
+                                  (db["gp_full_name"][item], sub_item, i)
+                            training_files.append(result_file)
+                    else:
+                        if (sp_stat['sub_item'] == 'Unknown'):
+                            sp_stat['sub_item'] = sub_item
+                            sp_stat['num'] = 1
+                        if (sp_stat['sub_item'] == sub_item):
+                            if (sp_stat['num'] <= num_spts):
+                                result_dir = trace_dir + \
+                                     "/%s/%s/simpoint_%d" % (item, sub_item, sp_stat['num'])
+                                result_file = result_dir + "/%s_%s_s%d_trace.out.gz"%\
+                                      (db["gp_full_name"][item], sub_item, sp_stat['num'])
+                                training_files.append(result_file)
+                                break
+                            else:
+                                sp_stat['sub_item'] = 'Unknown'
+                                continue
+        if (sp_stat['sub_item'] == 'Unknown'):
+            sp_stat['finished'] = True
         j.close()
         del db
         return training_files, spt_count
@@ -60,15 +80,14 @@ def read_load_trace_data(json_path, trace_dir, work_group, train_split):
     eval_data = []
     for file_name in training_files:
         cur_work_group = file_name.split('/')[4]
-        print("Loading data:", file_name)
+        logging.info("Loading data: " + file_name)
         with gzip.open(file_name, 'rt') as f:
             lines = f.readlines()
-            if (work_group == 'all'):
-                trace_per_spt = config.workgroup_trace_length // spt_count[cur_work_group]
-                if (len(lines) > trace_per_spt):
-                    lines = lines[:trace_per_spt]
-                else:
-                    lines += lines[:trace_per_spt - len(lines)]
+            trace_per_spt = config.workgroup_trace_length // spt_count[cur_work_group]
+            if (len(lines) > trace_per_spt):
+                lines = lines[:trace_per_spt]
+            else:
+                lines += lines[:trace_per_spt - len(lines)]
             for i, line in enumerate(lines):
                 pline = i, int(line, 16)
                 if i < train_split * len(lines):
@@ -166,11 +185,6 @@ def run(df_train,df_test,model_save_path,log_path,load=False):
     # Initialize model
     model = make_model(config.src_vocab_size, config.tgt_vocab_size, config.n_encoder_layers, config.n_decoder_layers,
                        config.d_model, config.d_ff, config.n_heads, config.dropout)
-    logging.info("d_model: " + str(config.d_model))
-    logging.info("d_ff: " + str(config.d_ff))
-    logging.info("n_heads: " + str(config.n_heads))
-    logging.info("n_encoder_layers: " + str(config.n_encoder_layers))
-    logging.info("n_decoder_layers: " + str(config.n_decoder_layers))
     # model_par = torch.nn.DataParallel(model)
     if load==True:
         model.load_state_dict(torch.load(model_save_path))
@@ -283,38 +297,78 @@ def preprocessing_bit(train_data):
 
     return df
 
-###################################################################################
 
 if __name__ == "__main__":
 
-    import os
     import warnings
     warnings.filterwarnings('ignore')
     import sys
 
-    json_path=sys.argv[1]
-    trace_dir=sys.argv[2]
-    model_save_path=sys.argv[3]
+    json_path = sys.argv[1]
+    trace_dir = sys.argv[2]
+    model_save_path = sys.argv[3]
     WORK_GROUP = sys.argv[4]
     TRAIN_SPLIT = float(sys.argv[5])
     GPU_NUM = sys.argv[6]
+    if (sys.argv[7] == 'sp_mode'):
+        SIMPOINT_MODE = True
+    else:
+        SIMPOINT_MODE = False
+
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_NUM
 
-    if os.path.isfile(model_save_path) :
-       loading=True
+    if os.path.isfile(model_save_path):
+        loading = True
+        if (SIMPOINT_MODE is True):
+            print("[Error] Simpoint mode specified but model file found.")
+            exit(-1)
     else:
-       loading=False
+        loading = False
+        if (SIMPOINT_MODE is True):
+            os.mkdir(model_save_path)
+            log_path = "%s/%s.log" % (model_save_path, model_save_path)
+        else:
+            log_path = model_save_path + ".log"
 
-    print("TransforMAP training start, loading:",loading)
-    log_path = model_save_path+".log"
+    print("TransforMAP training start, loading:", loading)
     utils.set_logger(log_path)
     logging.info("history length: " + str(config.LOOK_BACK))
     logging.info("prefetch degree: " + str(config.PRED_FORWARD))
     logging.info("work group: " + WORK_GROUP)
     logging.info("trace path: " + trace_dir)
-    train_data, eval_data = read_load_trace_data(json_path, trace_dir, WORK_GROUP, TRAIN_SPLIT)
-    df_train = preprocessing_bit(train_data)[:][["future","past"]]
-    Len_test = len(eval_data) if len(eval_data) < 10000 else 10000
-    df_test = preprocessing_bit(eval_data)[:Len_test][["future","past"]]
-    run(df_train, df_test, model_save_path, log_path, load=loading)
-    print_single_predict(df_test, 1090, model_save_path)
+    logging.info("=======================================")
+    logging.info("d_model: " + str(config.d_model))
+    logging.info("d_ff: " + str(config.d_ff))
+    logging.info("n_heads: " + str(config.n_heads))
+    logging.info("n_encoder_layers: " + str(config.n_encoder_layers))
+    logging.info("n_decoder_layers: " + str(config.n_decoder_layers))
+    if (SIMPOINT_MODE is True):
+        sp_stat = {
+            'num': 0,
+            'sub_item': "Unknown",
+            'finished': False
+        }
+        while (True):
+            train_data, eval_data = read_load_trace_data(json_path,
+                                                         trace_dir,
+                                                         WORK_GROUP,
+                                                         TRAIN_SPLIT,
+                                                         sp_stat=sp_stat)
+            if (sp_stat['finished'] is True):
+                break
+            df_train = preprocessing_bit(train_data)[:][["future", "past"]]
+            Len_test = len(eval_data) if len(eval_data) < 10000 else 10000
+            df_test = preprocessing_bit(eval_data)
+            df_test = df_test[:Len_test][["future", "past"]]
+            sp_save_path = model_save_path + '/%s_sp%d.pt' % (sp_stat['sub_item'], sp_stat['num'])
+            run(df_train, df_test, sp_save_path, log_path, load=loading)
+            print_single_predict(df_test, 1090, sp_save_path)
+            sp_stat['num'] += 1
+    else:
+        train_data, eval_data = read_load_trace_data(json_path, trace_dir,
+                                                     WORK_GROUP, TRAIN_SPLIT)
+        df_train = preprocessing_bit(train_data)[:][["future", "past"]]
+        Len_test = len(eval_data) if len(eval_data) < 10000 else 10000
+        df_test = preprocessing_bit(eval_data)[:Len_test][["future", "past"]]
+        run(df_train, df_test, model_save_path, log_path, load=loading)
+        print_single_predict(df_test, 1090, model_save_path)
