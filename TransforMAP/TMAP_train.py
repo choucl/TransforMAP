@@ -69,7 +69,7 @@ def read_load_trace_data(json_path, trace_dir, work_group,
                             else:
                                 sp_stat['sub_item'] = 'Unknown'
                                 continue
-        if (sp_stat['sub_item'] == 'Unknown'):
+        if ((not sp_stat is None) and sp_stat['sub_item'] == 'Unknown'):
             sp_stat['finished'] = True
         j.close()
         del db
