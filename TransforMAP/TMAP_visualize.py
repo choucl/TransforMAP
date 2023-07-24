@@ -33,7 +33,7 @@ def update_attention_figs(transformer_layer):
         attn_origin += transformer_layer.self_attn.attn_origin[0]
 
 
-def save_attention_figs(save_dir_path, visualize_mode):
+def save_attention_figs(save_dir_path, visualize_mode, model_name):
 
     def iterate_heads(property, name):
         if (visualize_mode == 'fuse'):
@@ -65,8 +65,8 @@ def save_attention_figs(save_dir_path, visualize_mode):
                            interpolation='none')
                 plt.savefig(save_dir_path + '/%s_%d.png' % (name, i))
 
-    iterate_heads(attn, 'attn')
-    iterate_heads(attn_origin, 'attn_origin')
+    iterate_heads(attn, model_name + '_attn')
+    iterate_heads(attn_origin, model_name + '_attn_origin')
     print("Done saving figs")
 
 
@@ -91,7 +91,8 @@ def visualizing(df_data, model_save_path, img_save_path, visualize_mode):
             update_attention_figs(model.encoder.layers[0])
             res.extend(decode_result)
     res = np.array(res)[:, :-1]
-    save_attention_figs(img_save_path, visualize_mode)
+    model_name = model_save_path.split('/')[-1]
+    save_attention_figs(img_save_path, visualize_mode, model_name)
 
 
 if __name__ == "__main__":
@@ -118,5 +119,5 @@ if __name__ == "__main__":
 
     print("TransforMAP visualize start, loading:", loading)
     read_data, _ = read_load_trace_data(json_path, trace_dir, WORK_GROUP, 1)
-    df_data = preprocessing_bit(read_data).sample(n=100)[["past", "future"]]
+    df_data = preprocessing_bit(read_data).sample(n=1000)[["past", "future"]]
     visualizing(df_data, model_save_path, img_save_path, visualize_mode)
